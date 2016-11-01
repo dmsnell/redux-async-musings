@@ -6,7 +6,7 @@ import { Provider, connect } from 'react-redux'
 const ADD_QUOTE = 'ADD_QUOTE'
 const REQUEST_QUOTE = 'REQUEST_QUOTE'
 
-const quoteUrl = 'http://api.icndb.com/jokes/random'
+const quoteUrl = 'https://api.icndb.com/jokes/random'
 
 const reducer = ( state = [], action ) => {
     switch ( action.type ) {
