@@ -15,11 +15,13 @@ module.exports = {
 			}
 		]
 	},
-	// plugins: [
-	// 	new webpack.ProvidePlugin( {
-	// 		'fetch': 'imports?this=>global!exports?global.fetch!whatwg-fetch'
-	// 	} )
-	// ],
+	plugins: [
+		new webpack.DefinePlugin( {
+			'process.env': {
+				'NODE_ENV': JSON.stringify('production')
+			}
+		} )
+	],
 	resolve: {
 		modulesDirectories: [ '', 'node_modules' ],
 		extensions: [ '', '.js', '.jsx' ]
