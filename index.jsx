@@ -3,6 +3,8 @@ import ReactDOM from 'react-dom'
 import { applyMiddleware, compose, createStore } from 'redux'
 import { Provider, connect } from 'react-redux'
 
+const tic = () => performance.now()
+
 const ADD_QUOTE = 'ADD_QUOTE'
 const REQUEST_QUOTE = 'REQUEST_QUOTE'
 
@@ -22,40 +24,29 @@ const reducer = ( state = [], action ) => {
     }
 }
 
-const apiState = {
-    isFetching: false,
-}
-
 const apiMiddleware = ( { dispatch, getState } ) => next => action => {
     if ( 'ADD_QUOTE_SUCCESS' === action.type ) {
         return next( addQuote( action.data ) )
     }
 
+    if ( 'ADD_QUOTE_FAILED' === action.type ) {
+        return next( addQuote( { value: { joke: 'Could not load quote' } } ) )
+    }
+
     if ( REQUEST_QUOTE !== action.type ) {
         return next( action )
     }
-    // if ( apiState.isFetching ) {
-    //     return next( action )
-    // }
-
-    // apiState.isFetching = true
-    // fetch( quoteUrl )
-    //     .then( r => r.json() )
-    //     .then( quote => {
-    //         apiState.isFetching = false
-    //         dispatch( addQuote( quote ) )
-    //     } )
-    //     .catch( console.log )
     
     next( action )
-    dispatch( {
-       type: 'HTTP_REQUEST',
-       method: 'GET',
-       errorPolicy: 'DROP',
-       url: quoteUrl,
-       onSuccess: 'ADD_QUOTE_SUCCESS',
-       onError: 'ADD_QUOTE_FAILED'
-    } )
+    dispatch( 
+        { type: 'HTTP_REQUEST'
+        , method: 'GET'
+        , errorPolicy: 'DROP'
+        , url: quoteUrl
+        , onSuccess: 'ADD_QUOTE_SUCCESS'
+        , onError: 'ADD_QUOTE_FAILED'
+        }
+    )
 }
 
 const thunkMiddleware = ( { dispatch } ) => next => action =>
@@ -74,12 +65,12 @@ class QuoteList extends Component {
     }
 
     render() {
-        const { 
-            quotes,
-            thunkFetch,
-            middlewareFetch, 
-            requestQuote,
-        } = this.props
+        const 
+            { quotes
+            , thunkFetch
+            , middlewareFetch 
+            , requestQuote
+            } = this.props
 
         return (
             <div>
@@ -95,18 +86,15 @@ class QuoteList extends Component {
     }
 }
 
-const mapStateToProps = state => ( {
-    quotes: state,
-} )
+const mapStateToProps = state => ( { quotes: state } )
 
-const addQuote = quote => ( { 
-    type: ADD_QUOTE, 
-    quote: quote.value.joke,
-} )
+const addQuote = quote => ( 
+    { type: ADD_QUOTE 
+    , quote: quote.value.joke
+    } 
+)
 
-const requestQuote = ( {
-    type: REQUEST_QUOTE,
-} )
+const requestQuote = ( { type: REQUEST_QUOTE } )
 
 const thunkFetch = dispatch => (
     fetch( quoteUrl )
@@ -126,15 +114,50 @@ const ConnectedQuoteList = connect(
     mapDispatchToProps,
 )( QuoteList )
 
+const throttle = ( f, ms ) => {
+    const throttleState =
+        { lastCall: tic()
+        , queue: []
+        , timer: null
+        }
+
+    const flushQueue = () => {
+        console.log( `flushing out ${ throttleState.queue.length } calls` )
+
+        throttleState.lastCall = tic()
+        throttleState.queue.forEach( args => f( ...args ) )
+        throttleState.queue = []
+        throttleState.timer = null
+    }
+
+    const addToQueue = args => {
+        throttleState.queue.push( args )
+
+        if ( ! throttleState.timer ) {
+            throttleState.timer = setTimeout( flushQueue, ms )
+        }
+    }
+
+    return ( ...args ) => addToQueue( args )
+}
+
+const batchRequest = throttle(
+    ( dispatch, action ) => {
+        fetch( action.url )
+            .then( r => r.json() )
+            .then( data => dispatch( { type: action.onSuccess, data } ) )
+            .catch( error => dispatch( { type: action.onError, action, error } ) )
+    },
+    5000
+)
+
 const httpMiddleware = ( { dispatch } ) => next => action => {
     if ( 'HTTP_REQUEST' !== action.type ) {
         return next( action )
     }
 
-    fetch( action.url )
-        .then( r => r.json() )
-        .then( data => dispatch( { type: action.onSuccess, data } ) )
-        .catch( error => dispatch( { type: action.onError, action, error } ) )
+    console.log( 'batching' )
+    batchRequest( dispatch, action )
 
     return next( action )
 }
