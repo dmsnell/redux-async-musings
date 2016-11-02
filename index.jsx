@@ -27,24 +27,35 @@ const apiState = {
 }
 
 const apiMiddleware = ( { dispatch, getState } ) => next => action => {
+    if ( 'ADD_QUOTE_SUCCESS' === action.type ) {
+        return next( addQuote( action.data ) )
+    }
+
     if ( REQUEST_QUOTE !== action.type ) {
         return next( action )
     }
+    // if ( apiState.isFetching ) {
+    //     return next( action )
+    // }
 
-    if ( apiState.isFetching ) {
-        return next( action )
-    }
-
-    apiState.isFetching = true
-    fetch( quoteUrl )
-        .then( r => r.json() )
-        .then( quote => {
-            apiState.isFetching = false
-            dispatch( addQuote( quote ) )
-        } )
-        .catch( console.log )
+    // apiState.isFetching = true
+    // fetch( quoteUrl )
+    //     .then( r => r.json() )
+    //     .then( quote => {
+    //         apiState.isFetching = false
+    //         dispatch( addQuote( quote ) )
+    //     } )
+    //     .catch( console.log )
     
-    return next( action )
+    next( action )
+    dispatch( {
+       type: 'HTTP_REQUEST',
+       method: 'GET',
+       errorPolicy: 'DROP',
+       url: quoteUrl,
+       onSuccess: 'ADD_QUOTE_SUCCESS',
+       onError: 'ADD_QUOTE_FAILED'
+    } )
 }
 
 const thunkMiddleware = ( { dispatch } ) => next => action =>
@@ -110,7 +121,23 @@ const mapDispatchToProps = dispatch => ( {
     thunkFetch: () => dispatch( thunkFetch ),
 } )
 
-const ConnectedQuoteList = connect( mapStateToProps, mapDispatchToProps )( QuoteList )
+const ConnectedQuoteList = connect( 
+    mapStateToProps, 
+    mapDispatchToProps,
+)( QuoteList )
+
+const httpMiddleware = ( { dispatch } ) => next => action => {
+    if ( 'HTTP_REQUEST' !== action.type ) {
+        return next( action )
+    }
+
+    fetch( action.url )
+        .then( r => r.json() )
+        .then( data => dispatch( { type: action.onSuccess, data } ) )
+        .catch( error => dispatch( { type: action.onError, action, error } ) )
+
+    return next( action )
+}
 
 const composeEnhancers = window.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__ || compose;
 const store = createStore( 
@@ -118,6 +145,7 @@ const store = createStore(
     composeEnhancers( applyMiddleware(
         thunkMiddleware,
         apiMiddleware,
+        httpMiddleware,
 ) ) )
 
 ReactDOM.render(
